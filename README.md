@@ -1,7 +1,3 @@
-# Controllable_XGating
-The code is not finished yet.
-To be continue...
-
 # Controllable Video Captioning with POS Sequence Guidance Based on Gated Fusion Network
 ## Introduction
 In this [paper](https://arxiv.org/abs/1908.10072), we propose to guide the video caption generation with POS information, based on a gated fusion of multiple representations of input videos. We construct a novel gated fusion network, with one cross-gating (CG) block, to effectively encode and fuse different types of representations, *e.g.*, the motion and content features. One POS sequence generator relies on this fused representation to predict the global syntactic structure, which is thereafter leveraged to guide the video captioning generation and control the syntax of the generated sentence. 
@@ -22,6 +18,8 @@ This code is a Pytorch implement of this work.
 ln -s coco-caption/ caption_src/coco-caption
 ln -s coco-caption/ pos_src/coco-caption
 ```
+4. Finally, the document structure of the root path should be like this:
+![image]()
 
 ## Evaluation
 We provide the pre-trained models of "Ours(IR+M)" and "Ours_RL(IR+M)" in paper to reproduce the result reported in paper. Users can change the command in `evaluation.sh` to reproduce "Ours(IR+M)" or "Ours_RL(IR+M)".
@@ -42,7 +40,7 @@ sh evaluation.sh
 ```
 
 ## Training
-Acutally, training in this repository is divided into two steps:
+Actually, training in this repository is divided into two steps:
 1. Train a global pos generator and extract the global postag features.
 ```python
 cd pos_src/
@@ -52,7 +50,7 @@ After early stopping, extract and store the postag features in `pos_src/globalpo
 ```python
 sh run_extract_pos.sh
 ```
-Rember copy the postag features hdf5 into `datas/`.
+Rember to copy the postag features hdf5 into `datas/`.
 
 2. Train the caption model.
 ```python
