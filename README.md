@@ -65,4 +65,4 @@ If you use our code in your research or wish to refer to the baseline results, p
 ```
 
 ## Acknowledge
-Special thanks to Ruotian Luo, as the code about [Self-critical Sequence Training](http://openaccess.thecvf.com/content_cvpr_2017/html/Rennie_Self-Critical_Sequence_Training_CVPR_2017_paper.html) was inspired by and references to [his repository](https://github.com/ruotianluo/self-critical.pytorch).
+Special thanks to Ruotian Luo, as our codes about [Self-critical Sequence Training](http://openaccess.thecvf.com/content_cvpr_2017/html/Rennie_Self-Critical_Sequence_Training_CVPR_2017_paper.html) was inspired by and references to [his repository](https://github.com/ruotianluo/self-critical.pytorch).
