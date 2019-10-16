@@ -16,9 +16,21 @@ This code is a Pytorch implement of this work.
 ## Prepare
 1. Download [Inception_ResNet_V2 features]() of MSRVTT-10K RGB frames and [I3D features]() of MSRVTT-10K optical flows, and put them in `datas` folder.
 2. Download [pre-trained models](), and put them in `results` folder.
-3. Download the automatic evaluation metrics -- [coco-caption]() and put it in `caption_src`.
+3. Download the automatic evaluation metrics -- [coco-caption](https://github.com/tylin/coco-caption) and put it in `caption_src`.
 
 ## Evaluation
+We provide the pre-trained models of "Ours(IR+M)" and "Ours_RL(IR+M)" in paper to reproduce the result reported in paper. Users can change the command in `evaluation.sh` to reproduce "Ours(IR+M)" or "Ours_RL(IR+M)".
+
+Metrics | Ours(IR_M) | Ours_RL(IR+M)
+:-: | :-: | :-: 
+BLEU@1 | 0.7875 | 0.8175 |
+BLEU@2 | 0.6601 | 0.6788 |
+BLEU@3 | 0.5339 | 0.5376 |
+BLEU@4 | 0.4194 | 0.4128 |
+METEOR | 0.2819 | 0.2869 |
+ROUGE-L| 0.6161 | 0.6210 |
+CIDEr  | 0.4866 | 0.5337 |
+
 ```python
 cd caption_src/
 sh evaluation.sh
