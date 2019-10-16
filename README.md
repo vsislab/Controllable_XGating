@@ -15,9 +15,13 @@ This code is a Pytorch implement of this work.
 * Cudnn 7.0.5
 
 ## Prepare
-1. Download [Inception_ResNet_V2 features]() of MSRVTT-10K RGB frames and [I3D features]() of MSRVTT-10K optical flows, and put them in `datas` folder.
+1. Download [Inception_ResNet_V2 features](https://drive.google.com/drive/folders/1_t590bqVTOpRywWlPXttdawiAazkqZkk?usp=sharing) of MSRVTT-10K RGB frames and [I3D features](https://drive.google.com/drive/folders/1-sjrZc5mpo8RRzGNc36l950f5BacPl78?usp=sharing) of MSRVTT-10K optical flows, and put them in `datas` folder.
 2. Download [pre-trained models](https://drive.google.com/drive/folders/15LoqMkl_fGQR1UaFxv4zcJgeKWuQo0tQ?usp=sharing), and put them in `results` folder.
-3. Download the automatic evaluation metrics -- [coco-caption](https://github.com/tylin/coco-caption) and put it in `caption_src`.
+3. Download the automatic evaluation metrics -- [coco-caption](https://github.com/tylin/coco-caption), and link it to `caption_src/` as well as `pos_src/`.
+```python
+ln -s coco-caption/ caption_src/coco-caption
+ln -s coco-caption/ pos_src/coco-caption
+```
 
 ## Evaluation
 We provide the pre-trained models of "Ours(IR+M)" and "Ours_RL(IR+M)" in paper to reproduce the result reported in paper. Users can change the command in `evaluation.sh` to reproduce "Ours(IR+M)" or "Ours_RL(IR+M)".
@@ -38,7 +42,21 @@ sh evaluation.sh
 ```
 
 ## Training
+Acutally, training in this repository is divided into two steps:
+1. Train a global pos generator and extract the global postag features.
 ```python
+cd pos_src/
+sh run_train.sh
+```
+After early stopping, extract and store the postag features in `pos_src/globalpos_features/xxx.hdf5`, where `xxx.hdf5` can be customized at [line36 of pos_src/eval_utils.py](https://github.com/vsislab/Controllable_XGating/blob/master/pos_src/eval_utils.py#L36)
+```python
+sh run_extract_pos.sh
+```
+Rember copy the postag features hdf5 into `datas/`.
+
+2. Train the caption model.
+```python
+cd caption_src/
 sh run_train.sh
 ```
 
