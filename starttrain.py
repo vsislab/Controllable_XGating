@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from logger import Logger
+from tensorboardX import SummaryWriter
 import numpy as np
 import cPickle
 import time
@@ -15,15 +15,6 @@ import myopts
 import myutils
 import eval_utils
 
-try:
-	import tensorflow as tf
-except ImportError:
-	print("Tensorflow not installed; No tensorboard logging.")
-	tf = None
-
-def add_summary_value(writer, key, value, iteration):
-	summary = tf.Summary(value=[tf.Summary.Value(tag=key, simple_value=value)])
-	writer.add_summary(summary, iteration)
 
 def train(opt):
 	# load train/valid/test data
@@ -31,7 +22,7 @@ def train(opt):
 	opt.category_size = get_nclasses(opt.data_path)
 	mytrain_dset, myvalid_dset, mytest_dset = loaddset(opt)
 
-	logger = tf and Logger(opt.checkpoint_path)
+	writer = SummaryWriter(opt.checkpoint_path)
 	# init or load training infos
 	infos = {}
 	histories = {}
@@ -52,8 +43,8 @@ def train(opt):
 		if opt.seed == 0:
 			opt.seed = infos['opt'].seed
 
-	iteration = 1 #infos.get('iter', 0) + 1
-	epoch = 0#infos.get('epoch', 0)
+	iteration = infos.get('iter', 0) + 1
+	epoch = infos.get('epoch', 0)
 
 	val_result_history = histories.get('val_result_history', {})
 	loss_history = histories.get('loss_history', {})
@@ -78,7 +69,7 @@ def train(opt):
 	if opt.start_from is not None:
 		# check if all necessary files exist
 		assert os.path.isdir(opt.start_from)," %s must be a a path" % opt.start_from
-		model.load_state_dict(torch.load(os.path.join(opt.start_from, 'model-best.pth')), strict=False)
+		model.load_state_dict(torch.load(os.path.join(opt.start_from, 'model-best.pth')), strict=True)
 	model.cuda()
 	model.train()
 
@@ -105,6 +96,7 @@ def train(opt):
 				decay_factor = opt.learning_rate_decay_rate  ** frac
 				opt.current_lr = opt.learning_rate * decay_factor
 				myutils.set_lr(optimizer, opt.current_lr) # set the decayed rate
+				#print('epoch {}, lr_decay_start {}, cur_lr {}'.format(epoch, opt.learning_rate_decay_start, opt.current_lr))
 			else:
 				opt.current_lr = opt.learning_rate
 			# Assign the scheduled sampling prob
@@ -123,7 +115,7 @@ def train(opt):
 		#loading train data
 		myloader_train = DataLoader(mytrain_dset, batch_size=opt.batch_size, collate_fn=data_io.collate_fn, shuffle=True)
 		torch.cuda.synchronize()
-		for data, cap, cap_mask, cap_classes, class_mask, feat1, feat2, feat3, feat4, feat_mask, pos_feat, lens, groundtruth, image_id in myloader_train:
+		for data, cap, cap_mask, cap_classes, class_mask, feat1, feat2, feat_mask, pos_feat, lens, groundtruth, image_id in myloader_train:
 			start = time.time()
 			cap = Variable(cap,requires_grad=False).cuda()
 			cap_mask = Variable(cap_mask,requires_grad=False).cuda()
@@ -131,50 +123,22 @@ def train(opt):
 			class_mask = Variable(class_mask, requires_grad=False).cuda()
 			feat1 = Variable(feat1, requires_grad=False).cuda()
 			feat2 = Variable(feat2, requires_grad=False).cuda()
-			feat3 = Variable(feat3, requires_grad=False).cuda()
-			feat4 = Variable(feat4, requires_grad=False).cuda()
 			feat_mask = Variable(feat_mask,requires_grad = False).cuda()
 			pos_feat = Variable(pos_feat, requires_grad=False).cuda()
 
 			optimizer.zero_grad()
-
-			if opt.rec_strategy is None:
-				if not sc_flag:
-					out, category = model(feat1, feat2, feat3, feat4,feat_mask,pos_feat,cap,cap_mask)  # (m,seq_len+1,n_words),(m, seq_len+1, n_classes)
-					loss_language = crit(out, cap, cap_mask)
-					loss_classify = classify_crit(category, cap_classes, cap_mask, class_mask)
-					# print(loss_language.data[0], loss_classify.data[0])
-					loss = (1. - opt.weight_class) * loss_language + opt.weight_class * loss_classify
-					#loss = loss_language + opt.weight_class * loss_classify
-				else:
-					print('Not implement yet.')
-					exit(11)
-					gen_result,sample_logprobs = model.sample(feat1, feat2, feat3, feat4,feat_mask,{'sample_max':0})
-					reward = myutils.get_self_critical_reward(model,feat,feat_mask,groundtruth,gen_result) # (m,max_length)
-					loss = rl_crit(sample_logprobs, gen_result, Variable(torch.from_numpy(reward).float().cuda(), requires_grad=False))
+			if not sc_flag:
+				out, category = model(feat1, feat2, feat_mask,pos_feat,cap,cap_mask)  # (m,seq_len+1,n_words),(m, seq_len+1, n_classes)
+				loss_language = crit(out, cap, cap_mask)
+				loss_classify = classify_crit(category, cap_classes, cap_mask, class_mask)
+				# print(loss_language.data[0], loss_classify.data[0])
+				loss = loss_language + opt.weight_class * loss_classify
 			else:
-				print('Not implement yet.')
-				exit(11)
-				if not sc_flag:
-					out, recfeats = model(feat, feat_mask, cap, cap_mask) # (m,seq_len+1,n_words),(m,seq_len+1,feat_size)
-					loss_sa = crit(out, cap, cap_mask)
-					loss_rec = RecnetLoss(recfeats, feat, feat_mask, opt.rec_strategy)
-					if opt.rec_strategy != 'both':
-						loss = opt.weight_sa * loss_sa + opt.weight_rec * loss_rec
-					else:
-						loss = opt.weight_sa * loss_sa + opt.weight_rec * loss_rec[0] + opt.weight_rec * loss_rec[1]
-				else:
-					gen_result, sample_logprobs = model.sample(feat, feat_mask, {'sample_max': 0})
-					reward = myutils.get_self_critical_reward(model, feat, feat_mask, groundtruth, gen_result)  # (m,max_length)
-					loss_sa = rl_crit(sample_logprobs, gen_result, Variable(torch.from_numpy(reward).float().cuda(), requires_grad=False))
-					out, recfeats = model(feat, feat_mask, cap, cap_mask)
-					loss_rec = RecnetLoss(recfeats, feat, feat_mask, opt.rec_strategy)
-					if opt.rec_strategy != 'both':
-						loss = opt.weight_sa * loss_sa + opt.weight_rec * loss_rec
-					else:
-						loss = opt.weight_sa * loss_sa + opt.weight_rec * loss_rec[0] + opt.weight_rec * loss_rec[1]
-
+				gen_result,sample_logprobs = model.sample(feat1, feat2, feat_mask, pos_feat, {'sample_max':0})
+				reward = myutils.get_self_critical_reward(model,feat1, feat2, feat_mask, pos_feat, groundtruth,gen_result) # (m,max_length)
+				loss = rl_crit(sample_logprobs, gen_result, Variable(torch.from_numpy(reward).float().cuda(), requires_grad=False))
 			loss.backward()
+			
 			myutils.clip_gradient(optimizer, opt.grad_clip)
 			optimizer.step()
 			train_loss = loss.data[0]
@@ -188,12 +152,11 @@ def train(opt):
 
 			# Write the training loss summary
 			if (iteration % opt.losses_log_every == 0):
-				if tf is not None:
-					logger.scalar_summary('train_loss', train_loss, iteration)
-					logger.scalar_summary('learning_rate', opt.current_lr, iteration)
-					logger.scalar_summary('scheduled_sampling_prob', model.ss_prob, iteration)
-					if sc_flag:
-						logger.scalar_summary('avg_reward', np.mean(reward[:, 0]), iteration)
+				writer.add_scalar('train_loss', train_loss, iteration)
+                                writer.add_scalar('learning_rate', opt.current_lr, iteration)
+                                writer.add_scalar('scheduled_sampling_prob', model.ss_prob, iteration)
+                                if sc_flag:
+                                        writer.add_scalar('avg_reward', np.mean(reward[:, 0]), iteration)
 
 				loss_history[iteration] = train_loss if not sc_flag else np.mean(reward[:, 0])
 				lr_history[iteration] = opt.current_lr
@@ -210,25 +173,26 @@ def train(opt):
 				print('validation is finish!')
 				time.sleep(3)
 
-				if tf is not None:
-					logger.scalar_summary('validation loss', val_loss, iteration)
-					if opt.language_eval == 1:
-						for tag, value in lang_stats.items():
-							if type(value) is list:
-								logger.scalar_summary(tag, value[-1], iteration)
-							else:
-								logger.scalar_summary(tag, value, iteration)
-						for tag, value in model.named_parameters():
-							tag = tag.replace('.', '/')
-							logger.histo_summary(tag, value.data.cpu().numpy(), iteration)
-							logger.histo_summary(tag + '/grad', (value.grad).data.cpu().numpy(), iteration)
+				writer.add_scalar('validation loss', val_loss, iteration)
+                                if opt.language_eval == 1:
+                                        for tag, value in lang_stats.items():
+                                                if type(value) is list:
+                                                        writer.add_scalar(tag, value[-1], iteration)
+                                                else:
+                                                        writer.add_scalar(tag, value, iteration)
+                                        for tag, value in model.named_parameters():
+						try:
+                                                	tag = tag.replace('.', '/')
+                                               		writer.add_histogram(tag, value.data.cpu().numpy(), iteration)
+                                                	writer.add_histogram(tag + '/grad', (value.grad).data.cpu().numpy(), iteration)
+						except AttributeError:
+							continue
 
 				val_result_history[iteration] = {'loss': val_loss, 'lang_stats': lang_stats, 'predictions': predictions}
 
 				# Save model if is improving on validation result
 				if opt.language_eval == 1:
 					current_score = lang_stats['CIDEr']
-					#current_score = -val_loss
 				else:
 					current_score = - val_loss
 				best_flag = False
@@ -272,63 +236,13 @@ def train(opt):
 					with open(os.path.join(opt.checkpoint_path, 'histories_' + opt.id + '-best.pkl'), 'wb') as f:
 						cPickle.dump(histories, f)
 
-				## when language metircs is processed, other methods are also consider to be saved
-				if opt.language_eval == 1:
-					# "meteor"
-					current_score_meteor = lang_stats['METEOR']
-					best_flag = False
-					if best_val_score_meteor is None or current_score_meteor > best_val_score_meteor:
-						best_val_score_meteor = current_score_meteor
-						best_flag = True
-
-					if best_flag:
-						checkpoint_path = os.path.join(opt.checkpoint_path, 'model-meteor-best.pth')
-						torch.save(model.state_dict(), checkpoint_path)
-						print("model saved to {}".format(checkpoint_path))
-						with open(os.path.join(opt.checkpoint_path, 'infos_' + opt.id + '-meteor-best.pkl'), 'wb') as f:
-							cPickle.dump(infos, f)
-						with open(os.path.join(opt.checkpoint_path, 'histories_' + opt.id + '-meteor-best.pkl'), 'wb') as f:
-							cPickle.dump(histories, f)
-
-					# "rouge"
-					current_score_rouge = lang_stats['ROUGE']
-					best_flag = False
-					if best_val_score_rouge is None or current_score_rouge > best_val_score_rouge:
-						best_val_score_rouge = current_score_rouge
-						best_flag = True
-
-					if best_flag:
-						checkpoint_path = os.path.join(opt.checkpoint_path, 'model-rouge-best.pth')
-						torch.save(model.state_dict(), checkpoint_path)
-						print("model saved to {}".format(checkpoint_path))
-						with open(os.path.join(opt.checkpoint_path, 'infos_' + opt.id + '-rouge-best.pkl'), 'wb') as f:
-							cPickle.dump(infos, f)
-						with open(os.path.join(opt.checkpoint_path, 'histories_' + opt.id + '-rouge-best.pkl'), 'wb') as f:
-							cPickle.dump(histories, f)
-
-					# "bleu4"
-					current_score_bleu = lang_stats['BLEU'][3]
-					best_flag = False
-					if best_val_score_bleu is None or current_score_bleu > best_val_score_bleu:
-						best_val_score_bleu = current_score_bleu
-						best_flag = True
-
-					if best_flag:
-						checkpoint_path = os.path.join(opt.checkpoint_path, 'model-bleu-best.pth')
-						torch.save(model.state_dict(), checkpoint_path)
-						print("model saved to {}".format(checkpoint_path))
-						with open(os.path.join(opt.checkpoint_path, 'infos_' + opt.id + '-bleu-best.pkl'), 'wb') as f:
-							cPickle.dump(infos, f)
-						with open(os.path.join(opt.checkpoint_path, 'histories_' + opt.id + '-bleu-best.pkl'),'wb') as f:
-							cPickle.dump(histories, f)
-				## ========================================================================
 			if tmp_patience >= opt.patience:
 				break
 			iteration += 1
 		if tmp_patience >= opt.patience:
 			print("early stop, trianing is finished!")
 			break
-		if epoch >= opt.max_epochs != -1:
+		if epoch >= opt.max_epochs and opt.max_epochs != -1:
 			print("reach max epochs, training is finished!")
 			break
 		epoch += 1

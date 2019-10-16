@@ -137,7 +137,7 @@ class custom_dset_train(Dataset):
 			itow[val] = key
 		return itow
 
-	def __init__(self, train_pkl, cap_pkl, cate_pkl, feat_path1, feat_path2, feat_path3, feat_path4, pos_path, wtoi_path, nwords=10000, K=28, opt=None):
+	def __init__(self, train_pkl, cap_pkl, cate_pkl, feat_path1, feat_path2, pos_path, wtoi_path, nwords=10000, K=28, opt=None):
 		self.nwords = nwords
 		self.K = K
 		data_name_list = load_pkl( train_pkl ) #[vid1_0,vid1_2, ...]
@@ -190,8 +190,6 @@ class custom_dset_train(Dataset):
 		self.gts_list = gts_list    #[[str,str,...],...]
 		self.feat_path1 = feat_path1
 		self.feat_path2 = feat_path2
-		#self.feat_path3 = feat_path3
-		#self.feat_path4 = feat_path4
 		self.pos_path = pos_path
 		print('got %d data and %d labels'%(len(self.data_list),len(self.cap_list)))
 
@@ -210,144 +208,19 @@ class custom_dset_train(Dataset):
 		feat2 = self.feat_path2[data.split('_')[0]][:]
 		feat2 = get_sub_frames(feat2, self.K)
 		feat2 = torch.from_numpy(feat2).float()
-		'''
-		feat3 = self.feat_path3[data.split('_')[0]][:]
-		feat3 = get_sub_pool_frames(feat3, self.K)
-		feat3 = torch.from_numpy(feat3).float()  # (k,h,w,d)
-
-		feat4 = self.feat_path4[data.split('_')[0]][:]
-		feat4 = get_sub_pool_frames(feat4, self.K)
-		feat4 = torch.from_numpy(feat4).float()  # (k,h,w,d)
-		'''
-		# feat_mask = (torch.sum(feat, dim=1, keepdim=True) != 0).float().transpose(1,0) # for fc features
+		
+                # feat_mask = (torch.sum(feat, dim=1, keepdim=True) != 0).float().transpose(1,0) # for fc features
 		feat_mask = (torch.sum(feat1.view(feat1.size(0), -1), dim=1, keepdim=True) != 0).float().transpose(1,0)
 
 		pos_feat = self.pos_path[data.split('_')[0]]['states'][:] 
 		pos_feat = pos_feat[-1]
 		pos_feat = torch.from_numpy(pos_feat).float()
 
-		return data,cap,cap_class,class_mask,feat1, feat2, feat1, feat2, feat_mask, pos_feat, gts
+		return data,cap,cap_class,class_mask,feat1, feat2, feat_mask, pos_feat, gts
 
 	def __len__(self):
 		return len(self.cap_list)
 
-class custom_dset_valid(Dataset):
-	def get_itow(self):
-		# wtoi = load_pkl( wtoi_path )
-		# wtoi['<EOS>'] = 0
-		# wtoi['UNK'] = 1
-		wtoi = self.wtoi
-		itow = {}
-		for key,val in wtoi.iteritems():
-			itow[val] = key
-		return itow
-
-	def __init__(self, valid_pkl, cap_pkl, cate_pkl, feat_path1, feat_path2, feat_path3, feat_path4, pos_path, wtoi_path, nwords=10000, K=28, opt=None):
-		self.nwords = nwords
-		self.K = K
-		data_name_list = load_pkl(valid_pkl) #[vid1_0,vid1_2, ...]
-		#random.seed(time.time())
-		#data_name_list = random.sample(data_name_list,4000)
-		caps = load_pkl( cap_pkl )
-		wtoi = load_pkl( wtoi_path )
-		wtoi['<EOS>'] = 0
-		wtoi['UNK'] = 1  # because 'wtoi_path' start from 2.
-		wtoi_keys = wtoi.keys()
-		self.wtoi = wtoi
-		filted_class, words_class, class_id, class_words, unmasked_classid = filt_word_category(cate_pkl, wtoi)
-		self.category = filted_class
-		category_keys = self.category.keys()
-
-		temp_cap_list = []
-		for i,ID in enumerate(data_name_list):
-			vidid, capid = ID.split('_') # vidid='vid1', capid=0
-			temp_cap_list.append(caps[vidid][int(capid)])
-
-		data_list = []
-		cap_list = []
-		for data,cap in zip(data_name_list,temp_cap_list):
-			token = cap['tokenized'].split()
-			if 0 < len(token) <= opt.seq_length:
-				data_list.append(data)
-				new_cap = {}
-				new_cap['caption'] = cap['caption']
-				new_cap['tokenized'] = cap['tokenized']
-				new_cap['numbered'] = [ wtoi[w] if w in wtoi_keys else 1 for w in token]
-				new_cap['category'] = [self.category[w] if w in category_keys else 1 for w in token]
-				new_cap['category_mask'] = [1 if index in unmasked_classid else 0 for index in new_cap['category']]
-				cap_list.append( new_cap )
-
-		tmp_vid = []
-		tmp_vidname = []
-		tmp_cap = []
-		for data, cap in zip(data_list, cap_list):
-			if data.split('_')[0] not in tmp_vid:
-				tmp_vid.append(data.split('_')[0])
-				tmp_vidname.append(data)
-				tmp_cap.append(cap)
-		data_list = tmp_vidname
-		cap_list = tmp_cap
-
-		gts_list = []
-		for i, ID in enumerate(data_list):
-			sub_gts_list = []
-			vidid, _ = ID.split('_')
-			for cap in caps[vidid]:
-				token = cap['tokenized'].split()
-				numbered = [wtoi[w] if w in wtoi_keys else 1 for w in token]
-				sub_gts_list.append(numbered)
-			sub_gts_list.sort(key=lambda x: len(x), reverse=True)
-			tmp_gts_arr = np.zeros([len(sub_gts_list), len(sub_gts_list[0])], dtype=int)
-			for x in range(len(sub_gts_list)):
-				tmp_gts_arr[x, :len(sub_gts_list[x])] = sub_gts_list[x]
-			gts_list.append(tmp_gts_arr)
-
-		self.data_list = data_list  #[vid1_0,vid1_2, ...]
-		self.cap_list = cap_list    #[{},{},...]
-		self.gts_list = gts_list
-		self.feat_path1 = feat_path1
-		self.feat_path2 = feat_path2
-		#self.feat_path3 = feat_path3
-		#self.feat_path4 = feat_path4
-		self.pos_path = pos_path
-		print('got %d data and %d labels'%(len(self.data_list),len(self.cap_list)))
-
-	def __getitem__(self, index):
-		data = self.data_list[index]
-		cap = self.cap_list[index]['numbered']
-		cap_class = self.cap_list[index]['category']
-		class_mask = self.cap_list[index]['category_mask']
-		gts = self.gts_list[index]
-
-		# feat1 = np.load(self.feat_path1 +'valid/' + data.split('_')[0] + '.npy')
-		feat1 = self.feat_path1[data.split('_')[0]][:]
-		feat1 = get_sub_frames(feat1, self.K)
-		feat1 = torch.from_numpy(feat1).float()  # turn numpy data to Tensor
-
-		# feat2 = np.load(self.feat_path2 +'valid/' + data.split('_')[0] + '.npy')
-		feat2 = self.feat_path2[data.split('_')[0]][:]
-		feat2 = get_sub_frames(feat2, self.K)
-		feat2 = torch.from_numpy(feat2).float()
-		'''
-		feat3 = self.feat_path3[data.split('_')[0]][:]
-		feat3 = get_sub_pool_frames(feat3, self.K)
-		feat3 = torch.from_numpy(feat3).float()  # (k,h,w,d)
-
-		feat4 = self.feat_path4[data.split('_')[0]][:]
-		feat4 = get_sub_pool_frames(feat4, self.K)
-		feat4 = torch.from_numpy(feat4).float()  # (k,h,w,d)
-		'''
-		# feat_mask = (torch.sum(feat, dim=1, keepdim=True) != 0).float().transpose(1,0)
-		feat_mask = (torch.sum(feat1.view(feat1.size(0), -1), dim=1, keepdim=True) != 0).float().transpose(1, 0)
-
-		pos_feat = self.pos_path[data.split('_')[0]]['states'][:]  
-		pos_feat = pos_feat[-1]
-		pos_feat = torch.from_numpy(pos_feat).float()
-
-		return data,cap,cap_class, class_mask, feat1,feat2,feat1, feat2,feat_mask,pos_feat, gts
-
-	def __len__(self):
-		return len(self.cap_list)
 
 class custom_dset_test(Dataset):
 	def get_itow(self):
@@ -361,7 +234,7 @@ class custom_dset_test(Dataset):
 			itow[val] = key
 		return itow
 
-	def __init__(self, test_pkl, cap_pkl, cate_pkl, feat_path1, feat_path2, feat_path3, feat_path4, pos_path, wtoi_path, nwords=10000, K=28, opt=None):
+	def __init__(self, test_pkl, cap_pkl, cate_pkl, feat_path1, feat_path2, pos_path, wtoi_path, nwords=10000, K=28, opt=None):
 		self.nwords = nwords
 		self.K = K
 		data_name_list = load_pkl( test_pkl ) #[vid1_0,vid1_2, ...]
@@ -424,8 +297,6 @@ class custom_dset_test(Dataset):
 		self.gts_list = gts_list
 		self.feat_path1 = feat_path1
 		self.feat_path2 = feat_path2
-		#self.feat_path3 = feat_path3
-		#self.feat_path4 = feat_path4
 		self.pos_path = pos_path
 		print('got %d data and %d labels'%(len(self.data_list),len(self.cap_list)))
 
@@ -445,35 +316,24 @@ class custom_dset_test(Dataset):
 		feat2 = self.feat_path2[data.split('_')[0]][:]
 		feat2 = get_sub_frames(feat2, self.K)
 		feat2 = torch.from_numpy(feat2).float()
-		'''
-		feat3 = self.feat_path3[data.split('_')[0]][:]
-		feat3 = get_sub_pool_frames(feat3, self.K)
-		feat3 = torch.from_numpy(feat3).float()  # (k,h,w,d)
-
-		feat4 = self.feat_path4[data.split('_')[0]][:]
-		feat4 = get_sub_pool_frames(feat4, self.K)
-		feat4 = torch.from_numpy(feat4).float()  # (k,h,w,d)
-		'''
 		# feat_mask = (torch.sum(feat, dim=1, keepdim=True) != 0).float().transpose(1,0)
 		feat_mask = (torch.sum(feat1.view(feat1.size(0), -1), dim=1, keepdim=True) != 0).float().transpose(1, 0)
 
 		pos_feat = self.pos_path[data.split('_')[0]]['states'][:] 
 		pos_feat = pos_feat[-1] 
 		pos_feat = torch.from_numpy(pos_feat).float()
-		return data,cap,cap_class,class_mask,feat1,feat2,feat1, feat2,feat_mask, pos_feat,gts
+		return data,cap,cap_class,class_mask,feat1,feat2,feat_mask, pos_feat,gts
 
 	def __len__(self):
 		return len(self.cap_list)
 
 def collate_fn(batch): # batch: ( data, cap, feat)
 	batch.sort(key=lambda x:len(x[1]), reverse=True)
-	data, cap, cap_class, class_mask, feat1, feat2, feat3, feat4, feat_mask, pos_feat,gts = zip(*batch)  # gts:
+	data, cap, cap_class, class_mask, feat1, feat2, feat_mask, pos_feat,gts = zip(*batch)  # gts:
 
 	max_len = len(cap[0])  # the first captions must has be the longest
 	feats1 = torch.stack(feat1, dim=0)
 	feats2 = torch.stack(feat2, dim=0)
-	#feats3 = torch.stack(feat3, dim=0)
-	#feats4 = torch.stack(feat4, dim=0)
 	feat_mask = torch.cat(feat_mask,dim=0)
 	pos_feat = torch.stack(pos_feat, dim=0)  # (m, rnn_size)
 
@@ -511,31 +371,26 @@ def collate_fn(batch): # batch: ( data, cap, feat)
 	# batch_feat = torch.cat(batch_feat,dim=0)
 	image_id = [i.split('_')[0] for i in data]
 
-	return data,caps,caps_mask,cap_classes,class_masks, feats1,feats2,feats1, feats2,feat_mask,pos_feat,lens,gts,image_id  # feat:(m,28,1536)
+	return data,caps,caps_mask,cap_classes,class_masks, feats1,feats2,feat_mask,pos_feat,lens,gts,image_id  # feat:(m,28,1536)
 
 def loaddset(opt):
-	train_pkl = os.path.join(opt.data_path, 'train.pkl')#os.path.join(opt.data_path, 'train.pkl')
-	valid_pkl = os.path.join(opt.data_path, 'test.pkl')
-	test_pkl =  os.path.join(opt.data_path, 'test.pkl')
+	train_pkl = os.path.join(opt.data_path, 'valid.pkl')#os.path.join(opt.data_path, 'train.pkl')
+	valid_pkl = os.path.join(opt.data_path, 'valid.pkl')
+	test_pkl =  os.path.join(opt.data_path, 'valid.pkl')
 	cap_pkl = os.path.join(opt.data_path, 'CAP.pkl')
 	cate_pkl = os.path.join(opt.data_path, 'category.pkl')
 	wtoi_path = os.path.join(opt.data_path, 'worddict.pkl')
 	# feature files, npy or hdf5
-	# file = os.path.join(opt.data_path, 'feats/')
 	feat_path1 = os.path.join(opt.data_path, 'feats.hdf5')
 	feat_path2 = os.path.join(opt.data_path2, 'feats.hdf5')
-	#feat_path3 = os.path.join(opt.data_path_pool, 'feats.hdf5')
-	#feat_path4 = os.path.join(opt.data_path_pool2, 'feats.hdf5')
 	posseq_path = os.path.join(opt.data_path, 'postagsequence.hdf5')
 	file1 = h5py.File(feat_path1, 'r')
 	file2 = h5py.File(feat_path2, 'r')
-	file3 = None#h5py.File(feat_path3, 'r')
-	file4 = None#h5py.File(feat_path4, 'r')
 	posfile = h5py.File(posseq_path, 'r')
 
-	mytrain_dset = custom_dset_train(train_pkl, cap_pkl, cate_pkl, file1, file2, file3, file4, posfile, wtoi_path, opt.vocab_size, opt.feat_K, opt)
-	myvalid_dset = custom_dset_valid(valid_pkl, cap_pkl, cate_pkl, file1, file2, file3, file4, posfile, wtoi_path, opt.vocab_size, opt.feat_K, opt)
-	mytest_dset = custom_dset_test(test_pkl, cap_pkl, cate_pkl, file1, file2, file3, file4, posfile, wtoi_path, opt.vocab_size, opt.feat_K, opt)
+	mytrain_dset = custom_dset_train(train_pkl, cap_pkl, cate_pkl, file1, file2, posfile, wtoi_path, opt.vocab_size, opt.feat_K, opt)
+	myvalid_dset = custom_dset_test(valid_pkl, cap_pkl, cate_pkl, file1, file2, posfile, wtoi_path, opt.vocab_size, opt.feat_K, opt)
+	mytest_dset = custom_dset_test(test_pkl, cap_pkl, cate_pkl, file1, file2, posfile, wtoi_path, opt.vocab_size, opt.feat_K, opt)
 	return mytrain_dset, myvalid_dset, mytest_dset
 
 def test_dataio(opt):
@@ -547,15 +402,11 @@ def test_dataio(opt):
 	# file = os.path.join(opt.data_path, 'feats/')
 	feat_path1 = os.path.join(opt.data_path, 'feats.hdf5')
 	feat_path2 = os.path.join(opt.data_path2, 'feats.hdf5')
-	#feat_path3 = os.path.join(opt.data_path_pool, 'feats.hdf5')
-	#feat_path4 = os.path.join(opt.data_path_pool2, 'feats.hdf5')
 	posseq_path = os.path.join(opt.data_path, 'postagsequence.hdf5')
 	file1 = h5py.File(feat_path1, 'r')
 	file2 = h5py.File(feat_path2, 'r')
-	file3 = None#h5py.File(feat_path3, 'r')
-	file4 = None#h5py.File(feat_path4, 'r')
 	posfile = h5py.File(posseq_path, 'r')
-	mytest_dset = custom_dset_test(test_pkl, cap_pkl, cate_pkl, file1, file2, file3, file4, posfile, wtoi_path, opt.vocab_size, opt.feat_K, opt)
+	mytest_dset = custom_dset_test(test_pkl, cap_pkl, cate_pkl, file1, file2, posfile, wtoi_path, opt.vocab_size, opt.feat_K, opt)
 	return mytest_dset
 
 

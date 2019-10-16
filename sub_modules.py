@@ -6,7 +6,6 @@ from torch.autograd import Variable
 from data_io import *
 import myopts
 from CaptionModel import CaptionModel
-from RecModel import RecModel
 
 def to_contiguous(tensor):
 	if tensor.is_contiguous():

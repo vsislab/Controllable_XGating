@@ -31,12 +31,12 @@ def eval_split(model, crit, classify_crit, my_dset, eval_kwargs={}): # eval_kwar
 	caps = data_io.get_caps(eval_kwargs['data_path'])
 
 	myloader = DataLoader(my_dset, batch_size=eval_kwargs.get('batch_size',64), collate_fn=data_io.collate_fn,shuffle=False)
-	for data, cap, cap_mask, cap_classes, class_mask, feat1, feat2, feat3, feat4, feat_mask, pos_feat, lens, groundtruth, image_ids in myloader:
-		tmp = [cap, cap_mask, cap_classes, class_mask, feat1, feat2, feat3, feat4, feat_mask, pos_feat]
+	for data, cap, cap_mask, cap_classes, class_mask, feat1, feat2,feat_mask, pos_feat, lens, groundtruth, image_ids in myloader:
+		tmp = [cap, cap_mask, cap_classes, class_mask, feat1, feat2, feat_mask, pos_feat]
 		tmp = [Variable( _ , volatile=True).cuda() for _ in tmp]
-		cap, cap_mask, cap_classes, class_mask, feat1, feat2, feat3, feat4, feat_mask, pos_feat = tmp
+		cap, cap_mask, cap_classes, class_mask, feat1, feat2, feat_mask, pos_feat = tmp
 		# forward the model to get loss
-		out, category = model(feat1, feat2, feat3, feat4, feat_mask, pos_feat, cap, cap_mask)
+		out, category = model(feat1, feat2, feat_mask, pos_feat, cap, cap_mask)
 		loss_language = crit(out, cap, cap_mask).data[0]
 		loss_category = classify_crit(category, cap_classes, cap_mask, class_mask).data[0]
 		#loss = (1. - weight_class) * loss_language + weight_class * loss_category
@@ -44,7 +44,7 @@ def eval_split(model, crit, classify_crit, my_dset, eval_kwargs={}): # eval_kwar
 		loss_sum = loss_sum + loss
 		loss_evals = loss_evals + 1
 		# forward the model to also get generated samples for each image
-		seq, seqLogprobs = model.sample(feat1, feat2, feat3, feat4, feat_mask, pos_feat, eval_kwargs)
+		seq, seqLogprobs = model.sample(feat1, feat2, feat_mask, pos_feat, eval_kwargs)
 		if 'cuda' in str(type(seq)):
 			seq = seq.cpu()
 		if 'cuda' in str(type(seqLogprobs)):
@@ -57,8 +57,6 @@ def eval_split(model, crit, classify_crit, my_dset, eval_kwargs={}): # eval_kwar
 			entry = {'image_id': image_ids[k], 'caption': sent, 'seqLogprob': seqLogprob.numpy(), }
 			predictions.append(entry)
 			gts.append(caps[image_ids[k]])
-			# if verbose:
-			#     print('image %s: %s' % (entry['image_id'], entry['caption']))
 	if verbose:
 		for x in predictions[:10]:
 			print('image %s: %s' % (x['image_id'], x['caption']))
@@ -87,7 +85,6 @@ def eval_split(model, crit, classify_crit, my_dset, eval_kwargs={}): # eval_kwar
 
 def language_eval(sample_seqs, gt_seqs):# sample_seqs:list[[x,x],[x,x],...], gt_seqs:list[[list1,list2,...],[list1,list2,...],...]
 	import sys
-	#sys.path.append("caption-eval")
         sys.path.append("coco-caption/pycocoevalcap/")
 	from bleu.bleu import Bleu
 	from cider.cider import Cider

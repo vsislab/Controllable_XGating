@@ -65,11 +65,10 @@ print(opt)
 torch.manual_seed(opt.seed)
 torch.cuda.manual_seed(opt.seed)
 # load train/valid/test data
-# mytrain_dset, myvalid_dset, mytest_dset = loaddset(opt)
 mytest_dset = test_dataio(opt)
-# set my model
+# set model
 model = SAModel(opt)
-model.load_state_dict(torch.load(opt.model))
+model.load_state_dict(torch.load(opt.model), strict=False)
 model.cuda()
 model.eval()
 crit = LanguageModelCriterion()
@@ -84,7 +83,7 @@ test_result['predictions'] = predictions
 test_result['scores'] = lang_stats
 #with open(os.path.join(opt.checkpoint_path,'test_result_fuxian.pkl'), 'wb') as f:
 #	cPickle.dump(test_result, f)
-#print ("testing finish !\n")
+print ("testing finish !\n")
 
 
 print('loss: ', test_loss)

@@ -7,7 +7,6 @@ from data_io import *
 from sub_modules import *
 import myopts
 from CaptionModel import CaptionModel
-from RecModel import RecModel
 
 
 # entire model framework
@@ -48,9 +47,6 @@ class SAModel(CaptionModel):
 		                               nn.ReLU(),
 		                               nn.Dropout(self.drop_prob_lm),
 		                               nn.Linear(128, self.category_size))
-		self.reconstruct = opt.rec_strategy
-		if self.reconstruct is not None:
-			self.RecNet = RecModel(opt)
 		self.init_weights()
 
 	def init_weights(self):
@@ -59,10 +55,6 @@ class SAModel(CaptionModel):
 		self.logit.bias.data.fill_(0)
 		self.logit.weight.data.uniform_(-initrange, initrange)
 
-	# def init_hidden(self, batch_size):
-	#     weight = next(self.parameters()).data
-	#     return ( Variable( weight.new(self.num_layers, batch_size, self.rnn_size).zero_() ),
-	#                 Variable( weight.new(self.num_layers, batch_size, self.rnn_size).zero_() ) ) # ( (1,m,1000),(1,m,1000) )
 	def init_hidden(self, feat, feat_mask): # feat(m,28,1536),feat_mask:(m,28)
 		feat_ = torch.from_numpy( np.sum(feat.cpu().data.numpy(),axis=1,dtype=np.float32) )  #(m,visual_size)
 		mask_ = torch.from_numpy( np.sum(feat_mask.cpu().data.numpy(),axis=1,dtype=np.float32) )  # (m,)
@@ -72,9 +64,8 @@ class SAModel(CaptionModel):
 		state2 = (self.img_embed_h_2(feat_mean), self.img_embed_c_2(feat_mean))
 		return [state1, state2] #( (1,m,rnn_size),(1,m,rnn_size) )
 
-	def forward(self, feats_rgb, feats_opfl, feats_rgb_pool, feats_opfl_pool, feat_mask, pos_feats, seq, seq_mask):
+	def forward(self, feats_rgb, feats_opfl, feat_mask, pos_feats, seq, seq_mask):
 		''' feats_rgb and feats_opfl: (m, K, feat_size)
-			feats_rgb_pool and feats_opfl_pool: (m, K, H, W, Depth)
 			pos_feats: (m, rnn_size)
 			seq: (m,seq_len+1)
 			seq_mask:(m,seq_len+1)'''
@@ -84,7 +75,7 @@ class SAModel(CaptionModel):
 		# ===== here insert encoder lstm operation =====
 		# feats_temporal = self.encoder(feats_rgb, feats_opfl, feat_mask)  # (m,28,visual_size)
 		# ===== 进行 spatial attention =====
-		feats = self.two_spatial_encoder(feats_rgb_pool, feats_opfl_pool, feat_mask)  # (m, K, depth)
+		feats = self.two_spatial_encoder(feats_rgb, feats_opfl, feat_mask)  # (m, K, depth)
 		# feats = self.fc_encoder(feats_rgb, feat_mask)
 		# feats = self.one_spatial_encoder(feats_rgb_pool, feat_mask)
 		# ===== 进行 temporal 和 spatial 级别的融合
@@ -120,12 +111,6 @@ class SAModel(CaptionModel):
 			outputs.append(output_word)  # [ (m,nwords),(m,nwords), ... ], total: seq_len+1
 			categories.append(output_category)
 
-		# here insert RecNet======================
-		if self.training and self.reconstruct is not None:
-			dh = torch.cat([_.unsqueeze(1) for _ in outputs_hidden], 1).contiguous() # Variable (m,seq_len+1,1000)
-			rec_feats = self.RecNet(dh, seq_mask) # (m, seq_len+1, feat_size)
-			return torch.cat([_.unsqueeze(1) for _ in outputs], 1).contiguous(), rec_feats
-		#=========================================
 		return torch.cat([_.unsqueeze(1) for _ in outputs], 1).contiguous(), \
 		       torch.cat([_.unsqueeze(1) for _ in categories], 1).contiguous()# (m,seq_len+1,nwords)
 
@@ -175,13 +160,13 @@ class SAModel(CaptionModel):
 		# return the samples and their log likelihoods
 		return seq.transpose(0, 1), seqLogprobs.transpose(0, 1)  # seq/seqLogprobs: (batch_size,seq_length)
 
-	def sample(self, feats_rgb, feats_opfl, feats_rgb_pool, feats_opfl_pool, feat_mask, pos_feats, opt={}):
+	def sample(self, feats_rgb, feats_opfl, feat_mask, pos_feats, opt={}):
 		sample_max = opt.get('sample_max', 1)
 		beam_size = opt.get('beam_size', 1)
 		temperature = opt.get('temperature', 1.0)
 		# =========== encoder lstm on feats =================
 		# feats_temporal = self.encoder(feats_rgb, feats_opfl, feat_mask)  # (m,28,rnn_size)
-		feats = self.two_spatial_encoder(feats_rgb_pool, feats_opfl_pool, feat_mask)
+		feats = self.two_spatial_encoder(feats_rgb, feats_opfl, feat_mask)
 		# feats = self.fc_encoder(feats_rgb, feat_mask)
 		# feats = self.one_spatial_encoder(feats_rgb_pool, feat_mask)
 		# feats = self.TS_fusion(feats_temporal, feats_spatial)
@@ -195,11 +180,6 @@ class SAModel(CaptionModel):
 		seq = []
 		seqLogprobs = []
 		for t in range(self.seq_length + 1):  # seq_length + <bos>
-			# if t == 0:
-			#     feats_ = np.mean(feats.data.numpy(), axis=1, dtype=np.float32)  # (m,28,1536) --> (m,1536)
-			#     feats_ = Variable(torch.from_numpy(feats_))  # (m,1536)
-			#     xt = self.img_embed(feats_)
-			# else:
 			if t == 0: # input <bos>
 				it = feats.data.new(batch_size).long().zero_()
 			elif sample_max:  # greedy search
@@ -252,14 +232,6 @@ class LanguageModelCriterion(nn.Module):  # compute and return mean loss for eac
 		output = -1. * input.gather(1,target) * mask
 		output = torch.sum(output) / torch.sum(mask)
 		return output
-		# target = target[:, :input.size(1)]   # (m,len_of_seq)
-		# mask =  mask[:, :input.size(1)]   # (m,len_of_seq)
-		# input = to_contiguous(input).view(-1, input.size(2))  # (m*len_of_seq, n_words)
-		# target = to_contiguous(target).view(-1, 1)   # (m*len_of_seq, 1)
-		# mask = to_contiguous(mask).view(-1, 1)   #  (m*len_of_seq, 1)
-		# output = - input.gather(1, target) * mask   # (m*len_of_seq,1)*(m*len_of_seq,1)=>(m*len_of_seq,1)
-		# output = torch.sum(output) / torch.sum(mask)  # a scalar, the mean probability for each word
-		# return output
 
 class ClassiferCriterion(nn.Module):
 	''' Compute and return mean classifer loss '''
@@ -293,7 +265,7 @@ class RewardCriterion(nn.Module):
 		output = - input * reward * Variable(mask)
 		output = torch.sum(output) / torch.sum(mask)
 		return output
-
+'''
 def RecnetLoss(rec_feats, feats, feats_mask, rec_strategy):
 	"""
 	:param rec_feats: Variable (m,seq_len+1,1536) from reconstructor
@@ -317,7 +289,7 @@ def RecnetLoss(rec_feats, feats, feats_mask, rec_strategy):
 		
 	Eds = torch.sqrt( torch.sum( ((rec_feats - feats) * feats_mask.unsqueeze(-1)) ** 2, -1) ) # (m, feat_K)
 	return torch.mean(Ed), torch.sum(Eds) / torch.sum(feats_mask)
-		
+'''		
 
 if __name__ == '__main__':
 	opt = myopts.parse_opt()
