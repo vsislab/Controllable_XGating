@@ -17,3 +17,9 @@ This code is a Pytorch implement of this work.
 1. Download [Inception_ResNet_V2 features]() of MSRVTT-10K RGB frames and [I3D features]() of MSRVTT-10K optical flows, and put them in `datas` folder.
 2. Download [pre-trained models](), and put them in `results` folder.
 3. Download the automatic evaluation metrics -- [coco-caption]() and put it in `caption_src`.
+
+## Evaluation
+```python
+cd caption_src/
+sh evaluation.sh
+```
