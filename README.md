@@ -19,7 +19,7 @@ ln -s coco-caption/ caption_src/coco-caption
 ln -s coco-caption/ pos_src/coco-caption
 ```
 4. Finally, the document structure of the root path should be like this:
-![image]()
+![image](https://github.com/vsislab/Controllable_XGating/blob/imgs/tree.png)
 
 ## Evaluation
 We provide the pre-trained models of "Ours(IR+M)" and "Ours_RL(IR+M)" in paper to reproduce the result reported in paper. Users can change the command in `evaluation.sh` to reproduce "Ours(IR+M)" or "Ours_RL(IR+M)".
