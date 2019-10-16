@@ -40,3 +40,9 @@ sh evaluation.sh
 ```python
 sh run_train.sh
 ```
+
+## Citation
+If you use our code in your research or wish to refer to the baseline results, please use the use the following BibTeX entry.
+```
+@article{wang2019controllable,  title={Controllable Video Captioning with POS Sequence Guidance Based on Gated Fusion Network},  author={Wang, Bairui and Ma, Lin and Zhang, Wei and Jiang, Wenhao and Wang, Jingwen and Liu, Wei},  journal={arXiv preprint arXiv:1908.10072},  year={2019}}
+```
