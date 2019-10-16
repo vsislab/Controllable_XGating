@@ -46,3 +46,6 @@ If you use our code in your research or wish to refer to the baseline results, p
 ```
 @article{wang2019controllable,  title={Controllable Video Captioning with POS Sequence Guidance Based on Gated Fusion Network},  author={Wang, Bairui and Ma, Lin and Zhang, Wei and Jiang, Wenhao and Wang, Jingwen and Liu, Wei},  journal={arXiv preprint arXiv:1908.10072},  year={2019}}
 ```
+
+## Acknowledge
+Special thanks to Ruotian Luo, as the code about [Self-critical Sequence Training](http://openaccess.thecvf.com/content_cvpr_2017/html/Rennie_Self-Critical_Sequence_Training_CVPR_2017_paper.html) was inspired by and references to [his repository](https://github.com/ruotianluo/self-critical.pytorch).
