@@ -35,3 +35,8 @@ CIDEr  | 0.4866 | 0.5337 |
 cd caption_src/
 sh evaluation.sh
 ```
+
+## Training
+```python
+sh run_train.sh
+```
