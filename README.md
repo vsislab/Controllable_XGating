@@ -15,8 +15,8 @@ This code is a Pytorch implement of this work.
 2. Download [pre-trained models](https://drive.google.com/drive/folders/15LoqMkl_fGQR1UaFxv4zcJgeKWuQo0tQ?usp=sharing), and put them in `results` folder.
 3. Download the automatic evaluation metrics -- [coco-caption](https://github.com/tylin/coco-caption), and link it to `caption_src/` as well as `pos_src/`.
 ```python
-ln -s coco-caption/ caption_src/coco-caption
-ln -s coco-caption/ pos_src/coco-caption
+ln -s coco-caption caption_src/coco-caption
+ln -s coco-caption pos_src/coco-caption
 ```
 4. Finally, the document structure of the root path should be like this:
 ![image](https://github.com/vsislab/Controllable_XGating/blob/imgs/tree.png)
@@ -61,7 +61,12 @@ sh run_train.sh
 ## Citation
 If you use our code in your research or wish to refer to the baseline results, please use the use the following BibTeX entry.
 ```
-@article{wang2019controllable,  title={Controllable Video Captioning with POS Sequence Guidance Based on Gated Fusion Network},  author={Wang, Bairui and Ma, Lin and Zhang, Wei and Jiang, Wenhao and Wang, Jingwen and Liu, Wei},  journal={arXiv preprint arXiv:1908.10072},  year={2019}}
+@article{wang2019controllable,
+  title={Controllable Video Captioning with POS Sequence Guidance Based on Gated Fusion Network},
+  author={Wang, Bairui and Ma, Lin and Zhang, Wei and Jiang, Wenhao and Wang, Jingwen and Liu, Wei},
+  journal={arXiv preprint arXiv:1908.10072},
+  year={2019}
+}
 ```
 
 ## Acknowledge
